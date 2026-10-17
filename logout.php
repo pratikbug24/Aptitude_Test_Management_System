@@ -1,7 +1,17 @@
-<?php 
-session_start();
-if(isset($_SESSION['email'])){
-session_destroy();}
-$ref= @$_GET['q'];
-header("location:$ref");
-?>
+<?php
+/**
+ * Ends the current session and returns the visitor to the landing page.
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/includes/bootstrap.php';
+
+$_SESSION = [];
+if (ini_get('session.use_cookies')) {
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], (bool) $params['secure'], (bool) $params['httponly']);
+}
+session_destroy();
+
+redirect('index.php');

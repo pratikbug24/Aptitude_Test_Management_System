@@ -1,96 +1,72 @@
 <?php
-	require('database.php');
-	session_start();
-	if(isset($_SESSION["email"]))
-	{
-		session_destroy();
-	}
-	
-	$ref=@$_GET['q'];		
-	if(isset($_POST['submit']))
-	{	
-		$email = $_POST['email'];
-		$pass = $_POST['password'];
-		$email = stripslashes($email);
-		$email = addslashes($email);
-		$pass = stripslashes($pass); 
-		$pass = addslashes($pass);
-		$email = mysqli_real_escape_string($con,$email);
-		$pass = mysqli_real_escape_string($con,$pass);					
-		$str = "SELECT * FROM user WHERE email='$email' and password='$pass'";
-		$result = mysqli_query($con,$str);
-		if((mysqli_num_rows($result))!=1) 
-		{
-			echo "<center><h3><script>alert('Sorry.. Wrong Username (or) Password');</script></h3></center>";
-			header("refresh:0;url=login.php");
-		}
-		else
-		{
-			$_SESSION['logged']=$email;
-			$row=mysqli_fetch_array($result);
-			$_SESSION['name']=$row[1];
-			$_SESSION['id']=$row[0];
-			$_SESSION['email']=$row[2];
-			$_SESSION['password']=$row[3];
-			header('location: welcome.php?q=1'); 					
-		}
-	}
-?>
+/**
+ * Student sign-in.
+ */
 
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta http-equiv="X-UA-Compatible" content="ie=edge">
-		<title>Login | Online Quiz System</title>
-		<link rel="stylesheet" href="scripts/bootstrap/bootstrap.min.css">
-		<link rel="stylesheet" href="scripts/ionicons/css/ionicons.min.css">
-		<link rel="stylesheet" href="css/form.css">
-        <style type="text/css">
-            body{
-                  width: 100%;
-                  background: url(image/book.png) ;
-                  background-position: center center;
-                  background-repeat: no-repeat;
-                  background-attachment: fixed;
-                  background-size: cover;
-                }
-          </style>
-	</head>
+declare(strict_types=1);
 
-	<body>
-		<section class="login first grey">
-			<div class="container">
-				<div class="box-wrapper">				
-					<div class="box box-border">
-						<div class="box-body">
-						<center> <h5 style="font-family: Noto Sans;">Login to </h5><h4 style="font-family: Noto Sans;">Online Quiz System</h4></center><br>
-							<form method="post" action="login.php" enctype="multipart/form-data">
-								<div class="form-group">
-									<label>Enter Your Email Id:</label>
-									<input type="email" name="email" class="form-control">
-								</div>
-								<div class="form-group">
-									<label class="fw">Enter Your Password:
-										<a href="javascript:void(0)" class="pull-right">Forgot Password?</a>
-									</label>
-									<input type="password" name="password" class="form-control">
-								</div> 
-								<div class="form-group text-right">
-									<button class="btn btn-primary btn-block" name="submit">Login</button>
-								</div>
-								<div class="form-group text-center">
-									<span class="text-muted">Don't have an account?</span> <a href="register.php">Register</a> Here..
-								</div>
-							</form>
-						</div>
-					</div>
-				</div>
-			</div>
-		</section>
+require_once __DIR__ . '/includes/bootstrap.php';
 
-		<script src="js/jquery.js"></script>
-		<script src="scripts/bootstrap/bootstrap.min.js"></script>
-	</body>
-</html>
+if (is_student()) {
+    redirect('student/dashboard.php');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+
+    $email = trim((string) ($_POST['email'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
+
+    if ($email === '' || $password === '') {
+        flash('error', 'Please enter both your e-mail address and password.');
+    } else {
+        $emailSql = db_escape($email);
+        $passwordSql = db_escape($password);
+        $row = db_one("SELECT * FROM user WHERE email = '$emailSql' AND password = '$passwordSql'");
+
+        if ($row === null) {
+            flash('error', 'Sorry, those credentials do not match our records.');
+        } else {
+            session_regenerate_id(true);
+            $_SESSION['logged'] = $row['email'];
+            $_SESSION['name'] = $row['name'];
+            $_SESSION['email'] = $row['email'];
+            $_SESSION['college'] = $row['college'];
+            unset($_SESSION['key']);
+
+            flash('success', 'Welcome back, ' . $row['name'] . '!');
+            redirect('student/dashboard.php');
+        }
+    }
+}
+
+$pageTitle = 'Sign in';
+$panelTitle = 'Welcome back';
+$panelSubtitle = 'Sign in to continue to your quiz dashboard.';
+$panelIcon = '↪';
+$panelBody = static function (): void {
+    ?>
+    <form class="form-grid" method="post" action="<?= e(app_url('login.php')) ?>" novalidate>
+        <?= csrf_field() ?>
+        <div class="field">
+            <label for="email">E-mail address</label>
+            <input class="input" type="email" id="email" name="email" autocomplete="email"
+                   placeholder="you@example.com" required autofocus>
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input class="input" type="password" id="password" name="password"
+                   autocomplete="current-password" placeholder="Your password" required>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+        </div>
+    </form>
+    <p class="form-foot">
+        New here? <a href="<?= e(app_url('register.php')) ?>">Create an account</a>
+        &nbsp;·&nbsp; <a href="<?= e(app_url('admin/login.php')) ?>">Administrator login</a>
+    </p>
+    <?php
+};
+
+require __DIR__ . '/includes/auth-layout.php';

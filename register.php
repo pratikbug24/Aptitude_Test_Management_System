@@ -1,103 +1,114 @@
 <?php
-	include("database.php");
-	session_start();
-	
-	if(isset($_POST['submit']))
-	{	
-		$name = $_POST['name'];
-		$name = stripslashes($name);
-		$name = addslashes($name);
+/**
+ * Student self-registration.
+ */
 
-		$email = $_POST['email'];
-		$email = stripslashes($email);
-		$email = addslashes($email);
+declare(strict_types=1);
 
-		$password = $_POST['password'];
-		$password = stripslashes($password);
-		$password = addslashes($password);
+require_once __DIR__ . '/includes/bootstrap.php';
 
-		$college = $_POST['college'];
-		$college = stripslashes($college);
-		$college = addslashes($college);
-		$str="SELECT email from user WHERE email='$email'";
-		$result=mysqli_query($con,$str);
-		
-		if((mysqli_num_rows($result))>0)	
-		{
-            echo "<center><h3><script>alert('Sorry.. This email is already registered !!');</script></h3></center>";
-            header("refresh:0;url=login.php");
-        }
-		else
-		{
-            $str="insert into user set name='$name',email='$email',password='$password',college='$college'";
-			if((mysqli_query($con,$str)))	
-			echo "<center><h3><script>alert('Congrats.. You have successfully registered !!');</script></h3></center>";
-			header('location: welcome.php?q=1');
-		}
+if (is_student()) {
+    redirect('student/dashboard.php');
+}
+
+$old = ['name' => '', 'email' => '', 'college' => ''];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+
+    $old['name'] = trim((string) ($_POST['name'] ?? ''));
+    $old['email'] = trim((string) ($_POST['email'] ?? ''));
+    $old['college'] = trim((string) ($_POST['college'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
+
+    $errors = [];
+    if ($old['name'] === '') {
+        $errors[] = 'Please enter your full name.';
     }
-?>
+    if (!filter_var($old['email'], FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid e-mail address.';
+    }
+    if (strlen($password) < 4) {
+        $errors[] = 'Password must be at least 4 characters long.';
+    }
+    if ($old['college'] === '') {
+        $errors[] = 'Please enter your college name.';
+    }
 
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta http-equiv="X-UA-Compatible" content="ie=edge">
-		<title>Register | Online Quiz System</title>
-		<link rel="stylesheet" href="scripts/bootstrap/bootstrap.min.css">
-		<link rel="stylesheet" href="scripts/ionicons/css/ionicons.min.css">
-		<link rel="stylesheet" href="css/form.css">
-        <style type="text/css">
-            body{
-                  width: 100%;
-                  background: url(image/book.png) ;
-                  background-position: center center;
-                  background-repeat: no-repeat;
-                  background-attachment: fixed;
-                  background-size: cover;
-                }
-          </style>
-	</head>
+    if (!$errors) {
+        $emailSql = db_escape($old['email']);
+        if (db_one("SELECT email FROM user WHERE email = '$emailSql'") !== null) {
+            $errors[] = 'That e-mail address is already registered. Try signing in instead.';
+        }
+    }
 
-	<body>
-		<section class="login first grey">
-			<div class="container">
-				<div class="box-wrapper">				
-					<div class="box box-border">
-						<div class="box-body">
-							<center> <h5 style="font-family: Noto Sans;">Register to </h5><h4 style="font-family: Noto Sans;">Online Quiz System</h4></center><br>
-							<form method="post" action="register.php" enctype="multipart/form-data">
-                                <div class="form-group">
-									<label>Enter Your Username:</label>
-									<input type="text" name="name" class="form-control" required />
-								</div>
-								<div class="form-group">
-									<label>Enter Your Email Id:</label>
-									<input type="email" name="email" class="form-control" required />
-								</div>
-								<div class="form-group">
-									<label>Enter Your Password:</label>
-									<input type="password" name="password" class="form-control" required />
-                                </div>
-								<div class="form-group">
-									<label>Enter Your College Name:</label>
-									<input type="text" name="college" class="form-control" required />
-								</div>
-                                
-								<div class="form-group text-right">
-									<button class="btn btn-primary btn-block" name="submit">Register</button>
-								</div>
-								<div class="form-group text-center">
-									<span class="text-muted">Already have an account! </span> <a href="login.php">Login </a> Here..
-								</div>
-							</form>
-						</div>
-					</div>
-				</div>
-			</div>
-		</section>
+    if ($errors) {
+        foreach ($errors as $error) {
+            flash('error', $error);
+        }
+    } else {
+        $nameSql = db_escape($old['name']);
+        $emailSql = db_escape($old['email']);
+        $collegeSql = db_escape($old['college']);
+        $passwordSql = db_escape($password);
 
-		<script src="js/jquery.js"></script>
-		<script src="scripts/bootstrap/bootstrap.min.js"></script>
-	</body>
-</html>
+        $ok = db_query(
+            "INSERT INTO user (name, email, password, college)
+             VALUES ('$nameSql', '$emailSql', '$passwordSql', '$collegeSql')"
+        );
+
+        if ($ok) {
+            session_regenerate_id(true);
+            $_SESSION['logged'] = $old['email'];
+            $_SESSION['name'] = $old['name'];
+            $_SESSION['email'] = $old['email'];
+            $_SESSION['college'] = $old['college'];
+            unset($_SESSION['key']);
+
+            flash('success', 'Registration complete. Good luck!');
+            redirect('student/dashboard.php');
+        }
+
+        flash('error', 'We could not complete your registration. Please try again.');
+    }
+}
+
+$pageTitle = 'Create account';
+$panelTitle = 'Create your account';
+$panelSubtitle = 'Register once, then attempt any published quiz.';
+$panelIcon = '＋';
+$panelBody = static function () use ($old): void {
+    ?>
+    <form class="form-grid" method="post" action="<?= e(app_url('register.php')) ?>" novalidate>
+        <?= csrf_field() ?>
+        <div class="field">
+            <label for="name">Full name</label>
+            <input class="input" type="text" id="name" name="name" autocomplete="name"
+                   placeholder="e.g. Priya Sharma" value="<?= e($old['name']) ?>" required autofocus>
+        </div>
+        <div class="field">
+            <label for="email">E-mail address</label>
+            <input class="input" type="email" id="email" name="email" autocomplete="email"
+                   placeholder="you@example.com" value="<?= e($old['email']) ?>" required>
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input class="input" type="password" id="password" name="password"
+                   autocomplete="new-password" placeholder="At least 4 characters" required>
+        </div>
+        <div class="field">
+            <label for="college">College / institute</label>
+            <input class="input" type="text" id="college" name="college" autocomplete="organization"
+                   placeholder="e.g. National Institute of Technology" value="<?= e($old['college']) ?>" required>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn--primary btn--block" type="submit">Create account</button>
+        </div>
+    </form>
+    <p class="form-foot">
+        Already registered? <a href="<?= e(app_url('login.php')) ?>">Sign in</a>
+    </p>
+    <?php
+};
+
+require __DIR__ . '/includes/auth-layout.php';
