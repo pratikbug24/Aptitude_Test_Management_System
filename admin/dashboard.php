@@ -11,7 +11,7 @@ require_once dirname(__DIR__) . '/includes/bootstrap.php';
 require_admin();
 
 $page = (string) ($_GET['page'] ?? 'overview');
-$validPages = ['overview', 'students', 'ranking', 'add-quiz', 'add-questions', 'remove-quiz'];
+$validPages = ['overview', 'students', 'ranking', 'add-quiz', 'add-questions', 'remove-quiz', 'registrations'];
 if (!in_array($page, $validPages, true)) {
     $page = 'overview';
 }
@@ -20,6 +20,7 @@ $pageTitle = 'Admin dashboard';
 $navItems = [
     'Overview' => app_url('admin/dashboard.php'),
     'Students' => app_url('admin/dashboard.php?page=students'),
+    'Registrations' => app_url('admin/dashboard.php?page=registrations'),
     'Ranking' => app_url('admin/dashboard.php?page=ranking'),
     'Add quiz' => app_url('admin/dashboard.php?page=add-quiz'),
     'Remove quiz' => app_url('admin/dashboard.php?page=remove-quiz'),
@@ -29,8 +30,9 @@ $activeNav = 'Overview';
 $pageHeadings = [
     'overview' => ['Administrator overview', 'Track quizzes, questions, students and attempts at a glance.'],
     'students' => ['Registered students', 'Removing a student also deletes their attempts and ranking entry.'],
+    'registrations' => ['Test registrations', 'Share a registration link, then see who signed up for each test.'],
     'ranking' => ['Ranking', 'Students ordered by cumulative score.'],
-    'add-quiz' => ['Create a quiz', 'Define the title, the number of questions and the marking scheme.'],
+    'add-quiz' => ['Create a quiz', 'Define the title, the number of questions, the marking scheme and the attempt window.'],
     'remove-quiz' => ['Remove a quiz', 'Deleting a quiz also removes its questions, options and student attempts.'],
 ];
 [$pageHeading, $pageLead] = $pageHeadings[$page] ?? ['', ''];
@@ -40,6 +42,8 @@ $students = [];
 $ranking = [];
 $quizzes = [];
 $builderQuiz = null;
+$enrolled = [];
+$registrationLink = '';
 
 if ($page === 'overview') {
     $overview = [
@@ -87,6 +91,40 @@ if ($page === 'overview') {
     $pageLead = 'Provide the question text, four options and the correct answer.';
 } elseif ($page === 'add-quiz') {
     $activeNav = 'Add quiz';
+} elseif ($page === 'registrations') {
+    $activeNav = 'Registrations';
+
+    // Every quiz, with its registration count, so the administrator can pick
+    // one and share its link.
+    $quizzes = db_all(
+        'SELECT q.*,
+                (SELECT COUNT(*) FROM enrollment e WHERE e.eid = q.eid) AS enrolled_count
+         FROM quiz q
+         ORDER BY q.date DESC'
+    );
+
+    $selectedEid = (string) ($_GET['eid'] ?? '');
+    if ($selectedEid === '' && $quizzes) {
+        $selectedEid = (string) $quizzes[0]['eid'];
+    }
+
+    $selectedQuiz = null;
+    if ($selectedEid !== '') {
+        $selectedQuiz = db_one("SELECT * FROM quiz WHERE eid = '" . db_escape($selectedEid) . "'");
+    }
+
+    if ($selectedQuiz !== null) {
+        $selectedEidSql = db_escape((string) $selectedQuiz['eid']);
+        $enrolled = db_all(
+            "SELECT e.email, e.registered_at, u.name, u.college
+             FROM enrollment e
+             LEFT JOIN user u ON u.email = e.email
+             WHERE e.eid = '$selectedEidSql'
+             ORDER BY e.registered_at ASC"
+        );
+        $registrationLink = app_url('register.php?eid=' . urlencode((string) $selectedQuiz['eid']));
+        $pageHeading = 'Registrations: ' . (string) $selectedQuiz['title'];
+    }
 }
 
 require dirname(__DIR__) . '/includes/header.php';
@@ -145,22 +183,30 @@ require dirname(__DIR__) . '/includes/header.php';
                             <th>Questions</th>
                             <th>Marks / correct</th>
                             <th>Penalty / wrong</th>
+                            <th>Schedule</th>
                             <th>Attempts</th>
                             <th>Created</th>
                             <th class="col-actions">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($quizzes as $i => $quiz): ?>
+                    <?php foreach ($quizzes as $i => $quiz):
+                        $window = quiz_window($quiz);
+                        ?>
                         <tr>
                             <td class="col-num"><?= $i + 1 ?></td>
                             <td><strong><?= e((string) $quiz['title']) ?></strong></td>
                             <td><?= (int) $quiz['question_count'] ?></td>
                             <td><?= (int) $quiz['sahi'] ?></td>
                             <td><?= (int) $quiz['wrong'] ?></td>
+                            <td>
+                                <span class="badge <?= e($window['badge']) ?>"><?= e($window['label']) ?></span>
+                            </td>
                             <td><?= (int) $quiz['attempt_count'] ?></td>
                             <td class="is-muted"><?= e(date('d M Y', strtotime((string) $quiz['date']))) ?></td>
                             <td class="col-actions">
+                                <a class="btn btn--ghost btn--sm"
+                                   href="<?= e(app_url('admin/dashboard.php?page=registrations&eid=' . urlencode((string) $quiz['eid']))) ?>">Registrations</a>
                                 <a class="btn btn--danger btn--sm"
                                    href="<?= e(app_url('admin/dashboard.php?page=remove-quiz')) ?>">Manage</a>
                             </td>
@@ -280,6 +326,22 @@ require dirname(__DIR__) . '/includes/header.php';
                     <span class="hint">Enter a positive number; it is subtracted on a wrong answer.</span>
                 </div>
             </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label for="start_at">Opens at</label>
+                    <input class="input" type="datetime-local" id="start_at" name="start_at">
+                    <span class="hint">Leave blank to open immediately.</span>
+                </div>
+                <div class="field">
+                    <label for="end_at">Closes at</label>
+                    <input class="input" type="datetime-local" id="end_at" name="end_at">
+                    <span class="hint">Leave blank to keep it open indefinitely.</span>
+                </div>
+            </div>
+            <p class="hint">
+                Candidates can only see and attempt this test if they registered through its
+                link, and only between these two times.
+            </p>
             <div class="form-actions">
                 <button class="btn btn--primary" type="submit">Continue to questions</button>
                 <a class="btn btn--ghost" href="<?= e(app_url('admin/dashboard.php')) ?>">Cancel</a>
@@ -330,6 +392,123 @@ require dirname(__DIR__) . '/includes/header.php';
             <a class="btn btn--ghost" href="<?= e(app_url('admin/dashboard.php?page=add-quiz')) ?>">Cancel</a>
         </div>
     </form>
+
+<?php elseif ($page === 'registrations'): ?>
+
+    <?php if (!$quizzes): ?>
+        <div class="empty">
+            <span class="empty__icon" aria-hidden="true">🔗</span>
+            <h3>No tests to share yet</h3>
+            <p>Create a test first, then its registration link appears here.</p>
+            <p style="margin-top:1rem">
+                <a class="btn btn--primary" href="<?= e(app_url('admin/dashboard.php?page=add-quiz')) ?>">Create a test</a>
+            </p>
+        </div>
+    <?php else: ?>
+
+        <div class="card mb-2">
+            <div class="card__head">
+                <h2 class="card__title">Registration link</h2>
+                <p class="card__subtitle">
+                    Send this link to the candidates you want in this test. Anyone who registers
+                    through it is enrolled for this test only.
+                </p>
+            </div>
+            <?php if ($registrationLink !== ''): ?>
+                <div class="field">
+                    <label for="reg-link">Shareable link</label>
+                    <input class="input" type="text" id="reg-link" value="<?= e($registrationLink) ?>" readonly
+                           onfocus="this.select()">
+                    <span class="hint">Also works for candidates who already have an account — signing in enrolls them.</span>
+                </div>
+            <?php else: ?>
+                <p class="muted">Select a test below to see its registration link.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="table-wrap">
+            <div class="table-scroll">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th class="col-num">#</th>
+                            <th>Test</th>
+                            <th>Schedule</th>
+                            <th>Registered</th>
+                            <th class="col-actions">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($quizzes as $i => $quiz):
+                        $window = quiz_window($quiz);
+                        $isSelected = $selectedQuiz !== null && (string) $selectedQuiz['eid'] === (string) $quiz['eid'];
+                        ?>
+                        <tr>
+                            <td class="col-num"><?= $i + 1 ?></td>
+                            <td><strong><?= e((string) $quiz['title']) ?></strong></td>
+                            <td>
+                                <span class="badge <?= e($window['badge']) ?>"><?= e($window['label']) ?></span>
+                                <div class="is-muted" style="font-size:.8rem;margin-top:.25rem"><?= e($window['detail']) ?></div>
+                            </td>
+                            <td><?= (int) $quiz['enrolled_count'] ?></td>
+                            <td class="col-actions">
+                                <a class="btn <?= $isSelected ? 'btn--primary' : 'btn--ghost' ?> btn--sm"
+                                   href="<?= e(app_url('admin/dashboard.php?page=registrations&eid=' . urlencode((string) $quiz['eid']))) ?>">
+                                    <?= $isSelected ? 'Viewing' : 'View candidates' ?>
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <?php if ($selectedQuiz !== null): ?>
+            <div class="section-head" style="margin-top:var(--section-gap)">
+                <div>
+                    <h2>Candidates registered for this test</h2>
+                    <p><?= count($enrolled) ?> candidate(s) enrolled.</p>
+                </div>
+            </div>
+
+            <?php if (!$enrolled): ?>
+                <div class="empty">
+                    <span class="empty__icon" aria-hidden="true">👥</span>
+                    <h3>No candidates yet</h3>
+                    <p>Share the registration link above. Sign-ups will appear here.</p>
+                </div>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <div class="table-scroll">
+                        <table class="data">
+                            <thead>
+                                <tr>
+                                    <th class="col-num">#</th>
+                                    <th>Name</th>
+                                    <th>College</th>
+                                    <th>E-mail</th>
+                                    <th>Registered on</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($enrolled as $i => $row): ?>
+                                <tr>
+                                    <td class="col-num"><?= $i + 1 ?></td>
+                                    <td><strong><?= e((string) ($row['name'] ?? '—')) ?></strong></td>
+                                    <td class="is-muted"><?= e((string) ($row['college'] ?? '—')) ?></td>
+                                    <td><?= e((string) $row['email']) ?></td>
+                                    <td class="is-muted"><?= e(date('d M Y, H:i', strtotime((string) $row['registered_at']))) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
+    <?php endif; ?>
 
 <?php elseif ($page === 'remove-quiz'): ?>
 

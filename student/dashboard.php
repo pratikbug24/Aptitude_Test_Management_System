@@ -44,11 +44,19 @@ $quizMeta = null;
 $question = null;
 $options = [];
 $result = null;
+$review = [];
 $stats = ['attempts' => 0, 'score' => 0, 'best' => 0];
 
 if ($page === 'home') {
     $activeNav = 'Home';
-    $quizzes = db_all('SELECT * FROM quiz ORDER BY date DESC');
+    // A candidate only ever sees the tests they are registered for.
+    $quizzes = db_all(
+        "SELECT q.*
+         FROM quiz q
+         JOIN enrollment e ON e.eid = q.eid
+         WHERE e.email = '$emailSql'
+         ORDER BY q.date DESC"
+    );
 
     $row = db_one("SELECT COUNT(*) AS attempts, COALESCE(SUM(score), 0) AS score FROM history WHERE email = '$emailSql'");
     $stats['attempts'] = (int) ($row['attempts'] ?? 0);
@@ -82,6 +90,9 @@ if ($page === 'home') {
         redirect('student/dashboard.php');
     }
 
+    // Only registered candidates may open a test, and only while it is open.
+    require_quiz_access($quizMeta);
+
     $total = (int) $quizMeta['total'];
     if ($sn > $total) {
         redirect('student/dashboard.php?page=result&eid=' . urlencode($eid));
@@ -110,6 +121,25 @@ if ($page === 'home') {
         redirect('student/dashboard.php');
     }
     $result['overall'] = (int) ($overall['score'] ?? 0);
+
+    // The answer review is only for the candidate who attempted this quiz.
+    $reviewQuestions = db_all(
+        "SELECT q.qid, q.qns, q.sn
+         FROM questions q
+         WHERE q.eid = '$eidSql'
+         ORDER BY q.sn ASC"
+    );
+    $review = [];
+    foreach ($reviewQuestions as $reviewQuestion) {
+        $qidSql = db_escape((string) $reviewQuestion['qid']);
+        $correct = db_one("SELECT ansid FROM answer WHERE qid = '$qidSql'");
+        $review[] = [
+            'sn' => (int) $reviewQuestion['sn'],
+            'qns' => (string) $reviewQuestion['qns'],
+            'correct' => (string) ($correct['ansid'] ?? ''),
+            'options' => db_all("SELECT option, optionid FROM options WHERE qid = '$qidSql'"),
+        ];
+    }
 }
 
 require dirname(__DIR__) . '/includes/header.php';
@@ -142,28 +172,29 @@ require dirname(__DIR__) . '/includes/header.php';
 
     <div class="section-head">
         <div>
-            <h2>Available quizzes</h2>
-            <p>Pick a topic to begin. Attempted quizzes can be restarted.</p>
+            <h2>Your registered tests</h2>
+            <p>These are the tests you registered for. Each one can only be attempted inside its scheduled window.</p>
         </div>
     </div>
 
     <?php if (!$quizzes): ?>
         <div class="empty">
             <span class="empty__icon" aria-hidden="true">📝</span>
-            <h3>No quizzes published yet</h3>
-            <p>Please check back later — your administrator has not added a quiz so far.</p>
+            <h3>You are not registered for any test yet</h3>
+            <p>Open the registration link your administrator sent you to join a test.</p>
         </div>
     <?php else: ?>
         <div class="table-wrap">
             <div class="table-scroll">
                 <table class="data">
-                    <caption class="visually-hidden">Quizzes you can attempt</caption>
+                    <caption class="visually-hidden">Tests you are registered for</caption>
                     <thead>
                         <tr>
                             <th class="col-num">#</th>
                             <th>Topic</th>
                             <th>Questions</th>
                             <th>Maximum marks</th>
+                            <th>Schedule</th>
                             <th class="col-actions">Action</th>
                         </tr>
                     </thead>
@@ -173,6 +204,7 @@ require dirname(__DIR__) . '/includes/header.php';
                         $eidSql = db_escape($eid);
                         $attempted = db_one("SELECT score FROM history WHERE eid = '$eidSql' AND email = '$emailSql'") !== null;
                         $maxMarks = (int) $quiz['sahi'] * (int) $quiz['total'];
+                        $window = quiz_window($quiz);
                         ?>
                         <tr>
                             <td class="col-num"><?= $i + 1 ?></td>
@@ -184,13 +216,24 @@ require dirname(__DIR__) . '/includes/header.php';
                             </td>
                             <td><?= (int) $quiz['total'] ?></td>
                             <td><?= $maxMarks ?></td>
+                            <td>
+                                <span class="badge <?= e($window['badge']) ?>"><?= e($window['label']) ?></span>
+                                <div class="is-muted" style="font-size:.8rem;margin-top:.25rem"><?= e($window['detail']) ?></div>
+                            </td>
                             <td class="col-actions">
-                                <?php if ($attempted): ?>
-                                    <a class="btn btn--amber btn--sm"
-                                       href="<?= e(app_url('student/dashboard.php?page=quiz&eid=' . urlencode($eid) . '&n=1')) ?>">Restart</a>
+                                <?php if ($window['open']): ?>
+                                    <?php if ($attempted): ?>
+                                        <a class="btn btn--amber btn--sm"
+                                           href="<?= e(app_url('student/dashboard.php?page=quiz&eid=' . urlencode($eid) . '&n=1')) ?>">Restart</a>
+                                    <?php else: ?>
+                                        <a class="btn btn--success btn--sm"
+                                           href="<?= e(app_url('student/dashboard.php?page=quiz&eid=' . urlencode($eid) . '&n=1')) ?>">Start</a>
+                                    <?php endif; ?>
+                                <?php elseif ($attempted): ?>
+                                    <a class="btn btn--ghost btn--sm"
+                                       href="<?= e(app_url('student/dashboard.php?page=result&eid=' . urlencode($eid))) ?>">View result</a>
                                 <?php else: ?>
-                                    <a class="btn btn--success btn--sm"
-                                       href="<?= e(app_url('student/dashboard.php?page=quiz&eid=' . urlencode($eid) . '&n=1')) ?>">Start</a>
+                                    <span class="is-muted">Not available</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -215,18 +258,23 @@ require dirname(__DIR__) . '/includes/header.php';
             <span class="quiz-progress__count"><?= $progress ?>%</span>
         </div>
 
+        <?php $window = quiz_window($quizMeta); ?>
         <div class="card">
             <div class="question-card__meta">
                 <span class="badge badge--info"><?= e((string) $quizMeta['title']) ?></span>
                 <span class="badge"><?= (int) $quizMeta['sahi'] ?> mark(s) for a correct answer</span>
                 <span class="badge"><?= (int) $quizMeta['wrong'] ?> mark(s) deducted for a wrong answer</span>
+                <?php if ($window['detail'] !== 'Open now'): ?>
+                    <span class="badge <?= e($window['badge']) ?>"><?= e($window['detail']) ?></span>
+                <?php endif; ?>
             </div>
 
             <p class="question-card__text"><?= nl2br(e((string) $question['qns'])) ?></p>
 
             <form method="post"
                   action="<?= e(app_url('actions/quiz.php?eid=' . urlencode((string) $quizMeta['eid']) . '&n=' . $sn)) ?>"
-                  data-guard>
+                  data-guard
+                  data-quiz-in-progress>
                 <?= csrf_field() ?>
                 <div class="option-list">
                     <?php foreach ($options as $i => $option): ?>
@@ -288,6 +336,37 @@ require dirname(__DIR__) . '/includes/header.php';
         <a class="btn btn--ghost" href="<?= e(app_url('student/dashboard.php?page=history')) ?>">View history</a>
         <a class="btn btn--ghost" href="<?= e(app_url('student/dashboard.php?page=ranking')) ?>">See ranking</a>
     </div>
+
+    <?php if ($review): ?>
+        <div class="section-head" style="margin-top:var(--section-gap)">
+            <div>
+                <h2>Answer review</h2>
+                <p>The correct option is marked for every question.</p>
+            </div>
+        </div>
+        <div class="stack">
+            <?php foreach ($review as $item): ?>
+                <div class="card">
+                    <div class="question-card__meta">
+                        <span class="badge badge--info">Question <?= $item['sn'] ?></span>
+                    </div>
+                    <p class="question-card__text"><?= nl2br(e($item['qns'])) ?></p>
+                    <div class="option-list">
+                        <?php foreach ($item['options'] as $option): ?>
+                            <?php $isCorrect = (string) $option['optionid'] === $item['correct']; ?>
+                            <div class="option" style="<?= $isCorrect ? 'border-color:var(--success);background:var(--success-bg)' : '' ?>">
+                                <span class="option__key" aria-hidden="true"><?= $isCorrect ? '✓' : '·' ?></span>
+                                <span class="option__text"><?= e((string) $option['option']) ?></span>
+                                <?php if ($isCorrect): ?>
+                                    <span class="badge badge--success">Correct answer</span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
 <?php elseif ($page === 'history'): ?>
 

@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------------------
+# Aptitude Test Management System — full stack
+#
+#   web  : Apache + PHP application
+#   db   : MySQL 8, schema imported automatically on first start
+#
+# Quick start:
+#   cp .env.example .env      # then edit the passwords
+#   docker compose up -d --build
+#   open http://localhost:8080
+# ---------------------------------------------------------------------------
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: atms-web:latest
+    container_name: atms-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: "${DB_NAME:-sourcecodester_exam}"
+      DB_USER: "${DB_USER:-atms}"
+      DB_PASS: "${DB_PASSWORD:?set DB_PASSWORD in your .env file}"
+      # Set to 1 to let the app import database/*.sql itself instead of MySQL.
+      DB_AUTO_IMPORT: "0"
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 80) ? 0 : 1);'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  db:
+    image: mysql:8.0
+    container_name: atms-db
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in your .env file}"
+      MYSQL_DATABASE: "${DB_NAME:-sourcecodester_exam}"
+      MYSQL_USER: "${DB_USER:-atms}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD in your .env file}"
+    volumes:
+      # Runs once, on an empty data directory, to create the tables.
+      - ./database/sourcecodester_exam.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - atms-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  atms-db-data:
