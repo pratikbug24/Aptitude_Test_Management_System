@@ -29,7 +29,7 @@ $flashes     = take_flashes();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="<?= e(APP_TAGLINE) ?>">
     <title><?= e($pageTitle) ?> &middot; <?= e(APP_SHORT_NAME) ?></title>
-    <link rel="shortcut icon" type="image/png" href="<?= e(app_url('assets/img/logo.png')) ?>">
+    <link rel="shortcut icon" type="image/png" href="<?= e(app_url('./assets/image/logo.png')) ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -41,7 +41,7 @@ $flashes     = take_flashes();
 <header class="site-header">
     <div class="shell site-header__inner">
         <a class="brand" href="<?= e(app_url(is_admin() ? 'admin/dashboard.php' : 'index.php')) ?>">
-            <span class="brand__mark" aria-hidden="true"><?= e(APP_SHORT_NAME[0]) ?></span>
+            <span class="brand__mark" aria-hidden="true"><img src="./assets/image/logo.png" alt=""></span>
             <span class="brand__text">
                 <span class="brand__name"><?= e(APP_NAME) ?></span>
                 <span class="brand__tag"><?= e(APP_TAGLINE) ?></span>
