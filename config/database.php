@@ -63,3 +63,58 @@ function db_escape(string $value): string
 {
     return db()->real_escape_string($value);
 }
+
+/**
+ * Bring an existing database up to the schema the current code expects.
+ *
+ * Fresh installs already ship with these objects (see
+ * database/sourcecodester_exam.sql); this keeps databases created from an
+ * older dump working without a manual migration. It is idempotent and cheap
+ * (a handful of information_schema lookups), so it runs once per request.
+ */
+function ensure_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $con = db();
+
+    if (!table_exists('enrollment')) {
+        $con->query(
+            'CREATE TABLE IF NOT EXISTS `enrollment` (
+                `eid` text NOT NULL,
+                `email` varchar(50) NOT NULL,
+                `registered_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8'
+        );
+    }
+
+    foreach (['start_at' => 'datetime NULL DEFAULT NULL', 'end_at' => 'datetime NULL DEFAULT NULL'] as $column => $definition) {
+        if (!column_exists('quiz', $column)) {
+            $con->query("ALTER TABLE `quiz` ADD COLUMN `$column` $definition");
+        }
+    }
+}
+
+/** True when the named table exists in the current database. */
+function table_exists(string $table): bool
+{
+    $name = db_escape($table);
+    return db_one("SHOW TABLES LIKE '$name'") !== null;
+}
+
+/** True when the named column exists on a table in the current database. */
+function column_exists(string $table, string $column): bool
+{
+    $tableSql = db_escape($table);
+    $columnSql = db_escape($column);
+    return db_one(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = '$tableSql'
+           AND COLUMN_NAME = '$columnSql'"
+    ) !== null;
+}

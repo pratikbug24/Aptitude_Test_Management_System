@@ -7,11 +7,13 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/config/database.php';
+require_once dirname(__DIR__) . '../config/database.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
+
+ensure_schema();
 
 // ---------------------------------------------------------------------------
 // Output helpers
@@ -136,4 +138,95 @@ function current_email(): string
 function current_name(): string
 {
     return (string) ($_SESSION['name'] ?? '');
+}
+
+// ---------------------------------------------------------------------------
+// Test scheduling & registration
+// ---------------------------------------------------------------------------
+
+/**
+ * Describe where a quiz sits in its attempt window.
+ *
+ * @param array $quiz a row from the `quiz` table; may carry start_at/end_at.
+ * @return array{open: bool, label: string, badge: string, detail: string}
+ */
+function quiz_window(array $quiz): array
+{
+    $start = trim((string) ($quiz['start_at'] ?? ''));
+    $end = trim((string) ($quiz['end_at'] ?? ''));
+    $now = time();
+
+    $startTs = $start !== '' ? strtotime($start) : null;
+    $endTs = $end !== '' ? strtotime($end) : null;
+
+    if ($startTs !== null && $now < $startTs) {
+        return [
+            'open' => false,
+            'label' => 'Scheduled',
+            'badge' => 'badge--info',
+            'detail' => 'Opens ' . date('d M Y, H:i', $startTs),
+        ];
+    }
+
+    if ($endTs !== null && $now > $endTs) {
+        return [
+            'open' => false,
+            'label' => 'Closed',
+            'badge' => 'badge--danger',
+            'detail' => 'Closed ' . date('d M Y, H:i', $endTs),
+        ];
+    }
+
+    return [
+        'open' => true,
+        'label' => 'Open',
+        'badge' => 'badge--success',
+        'detail' => 'Open now',
+    ];
+}
+
+/**
+ * True when the given e-mail is registered for the given quiz.
+ */
+function is_enrolled(string $email, string $eid): bool
+{
+    $emailSql = db_escape($email);
+    $eidSql = db_escape($eid);
+
+    return db_one(
+        "SELECT email FROM enrollment WHERE email = '$emailSql' AND eid = '$eidSql'"
+    ) !== null;
+}
+
+/**
+ * Register a candidate for a test. Idempotent: registering twice is a no-op.
+ */
+function enroll_candidate(string $email, string $eid): void
+{
+    if ($email === '' || $eid === '' || is_enrolled($email, $eid)) {
+        return;
+    }
+
+    $emailSql = db_escape($email);
+    $eidSql = db_escape($eid);
+    db_query("INSERT INTO enrollment (eid, email) VALUES ('$eidSql', '$emailSql')");
+}
+
+/**
+ * Send the current student back unless they registered for this quiz and it
+ * is currently inside its attempt window.
+ */
+function require_quiz_access(array $quiz): void
+{
+    $window = quiz_window($quiz);
+
+    if (!is_enrolled(current_email(), (string) $quiz['eid'])) {
+        flash('error', 'You are not registered for that test.');
+        redirect('student/dashboard.php');
+    }
+
+    if (!$window['open']) {
+        flash('warning', 'That test is not open right now. ' . $window['detail'] . '.');
+        redirect('student/dashboard.php');
+    }
 }
