@@ -122,7 +122,7 @@ if ($page === 'overview') {
              WHERE e.eid = '$selectedEidSql'
              ORDER BY e.registered_at ASC"
         );
-        $registrationLink = app_url('register.php?eid=' . urlencode((string) $selectedQuiz['eid']));
+        $registrationLink = app_url('quiz_register.php?eid=' . urlencode((string) $selectedQuiz['eid']));
         $pageHeading = 'Registrations: ' . (string) $selectedQuiz['title'];
     }
 }
@@ -415,11 +415,31 @@ require dirname(__DIR__) . '/includes/header.php';
                 </p>
             </div>
             <?php if ($registrationLink !== ''): ?>
+                <?php
+                $shareTitle = 'Register for ' . (string) $selectedQuiz['title'];
+                $shareText = 'Use this link to register for "' . (string) $selectedQuiz['title'] . '":';
+                ?>
                 <div class="field">
                     <label for="reg-link">Shareable link</label>
-                    <input class="input" type="text" id="reg-link" value="<?= e($registrationLink) ?>" readonly
-                           onfocus="this.select()">
+                    <div class="copy-row">
+                        <input class="input" type="text" id="reg-link" value="<?= e($registrationLink) ?>" readonly
+                               onfocus="this.select()">
+                        <button class="btn btn--ghost" type="button" data-copy-target="#reg-link">Copy</button>
+                    </div>
                     <span class="hint">Also works for candidates who already have an account — signing in enrolls them.</span>
+                </div>
+                <div class="share-row">
+                    <span class="share-row__label">Share via</span>
+                    <a class="btn btn--ghost btn--sm"
+                       href="mailto:?subject=<?= rawurlencode($shareTitle) ?>&amp;body=<?= rawurlencode($shareText . "\n\n" . $registrationLink) ?>">E-mail</a>
+                    <a class="btn btn--ghost btn--sm" target="_blank" rel="noopener"
+                       href="https://wa.me/?text=<?= rawurlencode($shareText . ' ' . $registrationLink) ?>">WhatsApp</a>
+                    <a class="btn btn--ghost btn--sm"
+                       href="sms:?body=<?= rawurlencode($shareText . ' ' . $registrationLink) ?>">SMS</a>
+                    <button class="btn btn--ghost btn--sm" type="button" hidden
+                            data-share-url="<?= e($registrationLink) ?>"
+                            data-share-title="<?= e($shareTitle) ?>"
+                            data-share-text="<?= e($shareText) ?>">More…</button>
                 </div>
             <?php else: ?>
                 <p class="muted">Select a test below to see its registration link.</p>

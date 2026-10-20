@@ -44,6 +44,50 @@
         window.requestAnimationFrame(function () { bar.style.width = value + '%'; });
     });
 
+    // Copy the registration link to the clipboard.
+    document.querySelectorAll('[data-copy-target]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var field = document.querySelector(button.dataset.copyTarget);
+            if (!field) { return; }
+            var original = button.textContent;
+
+            function done(label) {
+                button.textContent = label;
+                window.setTimeout(function () { button.textContent = original; }, 1800);
+            }
+
+            function fallback() {
+                field.removeAttribute('readonly');
+                field.select();
+                try { document.execCommand('copy'); done('Copied!'); }
+                catch (error) { done('Press Ctrl+C'); }
+                field.setAttribute('readonly', 'readonly');
+                field.blur();
+            }
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(field.value).then(function () {
+                    done('Copied!');
+                }, fallback);
+            } else {
+                fallback();
+            }
+        });
+    });
+
+    // Offer the platform share sheet when the browser supports it.
+    document.querySelectorAll('[data-share-url]').forEach(function (button) {
+        if (!navigator.share) { return; }
+        button.hidden = false;
+        button.addEventListener('click', function () {
+            navigator.share({
+                title: button.dataset.shareTitle,
+                text: button.dataset.shareText,
+                url: button.dataset.shareUrl
+            }).catch(function () { /* dismissed */ });
+        });
+    });
+
     // Warn before leaving an in-progress quiz.
     var quiz = document.querySelector('[data-quiz-in-progress]');
     if (quiz) {
