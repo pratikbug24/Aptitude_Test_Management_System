@@ -31,6 +31,7 @@ $navItems = [
     'Home' => app_url('student/dashboard.php'),
     'History' => app_url('student/dashboard.php?page=history'),
     'Ranking' => app_url('student/dashboard.php?page=ranking'),
+    'Profile' => app_url('student/profile.php'),
     'Log out' => app_url('logout.php'),
 ];
 

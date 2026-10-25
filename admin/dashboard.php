@@ -426,7 +426,7 @@ require dirname(__DIR__) . '/includes/header.php';
                                onfocus="this.select()">
                         <button class="btn btn--ghost" type="button" data-copy-target="#reg-link">Copy</button>
                     </div>
-                    <span class="hint">Also works for candidates who already have an account — signing in enrolls them.</span>
+                    <span class="hint">Candidates give only their name and e-mail address — no password needed.</span>
                 </div>
                 <div class="share-row">
                     <span class="share-row__label">Share via</span>

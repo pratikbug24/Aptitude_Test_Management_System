@@ -461,6 +461,81 @@ table.data .is-muted { color: var(--ink-400); }
 .btn-row { display: flex; flex-wrap: wrap; gap: .75rem; }
 
 /* --------------------------------------------------------------------------
+   9b. Profile
+   -------------------------------------------------------------------------- */
+.profile-hero {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    margin-bottom: var(--section-gap);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--brand-600), var(--teal-500));
+    color: var(--white);
+    box-shadow: var(--shadow-md);
+}
+.profile-hero__avatar {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, .22);
+    border: 2px solid rgba(255, 255, 255, .5);
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    font-weight: 700;
+}
+.profile-hero__body { min-width: 0; }
+.profile-hero h2 { margin: 0; font-size: 1.5rem; color: var(--white); }
+.profile-hero__email { margin: .2rem 0 .6rem; color: rgba(255, 255, 255, .85); font-size: .95rem; }
+.profile-hero__meta { display: flex; flex-wrap: wrap; gap: .4rem; }
+.profile-hero__meta .badge { background: rgba(255, 255, 255, .2); color: var(--white); }
+
+.profile-grid {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+/* Progress chart */
+.chart { width: 100%; height: auto; display: block; }
+.chart__grid { stroke: var(--ink-200); stroke-width: 1; }
+.chart__tick { fill: var(--ink-400); font-size: 11px; font-family: var(--font-sans); }
+.chart__label { fill: var(--ink-500); font-size: 11px; font-family: var(--font-sans); }
+.chart__area { fill: var(--brand-500); opacity: .12; }
+.chart__line {
+    fill: none;
+    stroke: var(--brand-600);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+.chart__point { fill: var(--white); stroke: var(--brand-600); stroke-width: 2.5; }
+.chart__point:hover { fill: var(--teal-500); stroke: var(--teal-600); }
+
+/* Horizontal bar list */
+.bar-list { display: grid; gap: .9rem; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 1.4fr) 3fr auto; align-items: center; gap: .75rem; }
+.bar-row__label { font-size: .88rem; font-weight: 600; color: var(--ink-800); }
+.bar-row__track { height: 10px; border-radius: var(--radius-pill); background: var(--ink-100); overflow: hidden; }
+.bar-row__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--brand-600), var(--teal-500));
+}
+.bar-row__value { font-weight: 700; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+    .profile-hero { flex-direction: column; text-align: center; }
+    .profile-hero__meta { justify-content: center; }
+    .bar-row { grid-template-columns: 1fr auto; }
+    .bar-row__label { grid-column: 1 / -1; }
+}
+
+/* --------------------------------------------------------------------------
    10. Forms
    -------------------------------------------------------------------------- */
 .form-grid { display: grid; gap: 1.1rem; }

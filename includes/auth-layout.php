@@ -26,7 +26,7 @@ $flashes       = take_flashes();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($pageTitle) ?> &middot; <?= e(APP_SHORT_NAME) ?></title>
-    <link rel="shortcut icon" type="image/png" href="<?= e(app_url('assets/img/logo.png')) ?>">
+    <link rel="shortcut icon" type="image/png" href="<?= e(app_url('http://localhost/quiz%20system/assets/image/logo.png')) ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@ $flashes       = take_flashes();
 <div class="auth">
     <aside class="auth__aside">
         <a class="brand brand--light" href="<?= e(app_url('index.php')) ?>">
-            <span class="brand__mark" aria-hidden="true"><?= e(APP_SHORT_NAME[0]) ?></span>
+            <span class="brand__mark" aria-hidden="true"><img src="http://localhost/quiz%20system/assets/image/logo.png" alt=""></span>
             <span class="brand__text">
                 <span class="brand__name"><?= e(APP_NAME) ?></span>
                 <span class="brand__tag"><?= e(APP_TAGLINE) ?></span>
